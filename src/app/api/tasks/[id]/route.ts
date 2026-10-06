@@ -16,6 +16,47 @@ const VALID_PRIORITIES = [
   TaskPriority.HIGH,
 ];
 
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const currentUser = await getAuthUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    if (!id) {
+      return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
+    }
+
+    const task = await prisma.task.findUnique({
+      where: { id },
+      include: {
+        createdBy: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+        assignedTo: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+      },
+    });
+
+    if (!task) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ task });
+  } catch (error) {
+    console.error("Error fetching task:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch task" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -84,7 +125,7 @@ export async function PATCH(
       existingTask.status !== TaskStatus.COMPLETED;
 
     // Both creator and assignee can update status
-    if (body.status) {
+    if (body.status !== undefined) {
       if (!VALID_STATUSES.includes(body.status)) {
         return NextResponse.json(
           { error: "Invalid status value" },
@@ -94,27 +135,32 @@ export async function PATCH(
       dataToUpdate.status = body.status;
     }
 
-    // Only creator can update task details
+    // Only creator can update task details (title, description, priority, dueDate, assignedTo)
     if (isCreator) {
-      if (typeof body.title === "string") {
-        const trimmedTitle = body.title.trim();
-        if (!trimmedTitle) {
+      if (body.title !== undefined) {
+        if (typeof body.title !== "string" || !body.title.trim()) {
           return NextResponse.json(
             { error: "Title cannot be empty" },
             { status: 400 }
           );
         }
-        dataToUpdate.title = trimmedTitle;
+        dataToUpdate.title = body.title.trim();
       }
 
       if (body.description !== undefined) {
         dataToUpdate.description =
           typeof body.description === "string"
-            ? body.description.trim()
+            ? body.description.trim() || null
             : null;
       }
 
-      if (body.priority && VALID_PRIORITIES.includes(body.priority)) {
+      if (body.priority !== undefined) {
+        if (!VALID_PRIORITIES.includes(body.priority)) {
+          return NextResponse.json(
+            { error: "Invalid priority value" },
+            { status: 400 }
+          );
+        }
         dataToUpdate.priority = body.priority;
       }
 
@@ -123,9 +169,13 @@ export async function PATCH(
           dataToUpdate.dueDate = null;
         } else {
           const parsed = new Date(body.dueDate);
-          if (!isNaN(parsed.getTime())) {
-            dataToUpdate.dueDate = parsed;
+          if (isNaN(parsed.getTime())) {
+            return NextResponse.json(
+              { error: "Invalid due date format" },
+              { status: 400 }
+            );
           }
+          dataToUpdate.dueDate = parsed;
         }
       }
 
@@ -170,8 +220,7 @@ export async function PATCH(
       const result = await sendTaskCompletedEmail({
         creatorEmail: updatedTask.createdBy.email,
         creatorName: updatedTask.createdBy.name,
-        completedByName:
-          currentUser.name || currentUser.email,
+        completedByName: currentUser.name || currentUser.email,
         taskTitle: updatedTask.title,
         taskPriority: updatedTask.priority,
       }).catch((err) => {
@@ -200,6 +249,58 @@ export async function PATCH(
     console.error("Error updating task:", error);
     return NextResponse.json(
       { error: "Failed to update task" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const currentUser = await getAuthUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    if (!id) {
+      return NextResponse.json(
+        { error: "Task ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const existingTask = await prisma.task.findUnique({
+      where: { id },
+      select: { id: true, createdById: true },
+    });
+
+    if (!existingTask) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    // Only creator is authorized to delete the task
+    if (existingTask.createdById !== currentUser.id) {
+      return NextResponse.json(
+        { error: "Only the task creator can delete this task" },
+        { status: 403 }
+      );
+    }
+
+    await prisma.task.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Task deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting task:", error);
+    return NextResponse.json(
+      { error: "Failed to delete task" },
       { status: 500 }
     );
   }

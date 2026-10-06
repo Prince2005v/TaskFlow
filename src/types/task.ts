@@ -7,6 +7,14 @@ export type SafeUser = {
   image: string | null;
 };
 
+export type TeamMember = SafeUser & {
+  _count?: {
+    assignedTasks: number;
+    createdTasks: number;
+  };
+  createdAt?: Date | string;
+};
+
 export type TaskWithUsers = {
   id: string;
   title: string;

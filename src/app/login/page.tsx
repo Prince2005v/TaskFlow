@@ -4,11 +4,11 @@ import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CheckSquare, AlertCircle, Loader2, ArrowLeft } from "lucide-react";
+import { CheckSquare, AlertCircle, Loader2, ArrowLeft, Shield, Zap, Users } from "lucide-react";
 
 function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" {...props}>
+    <svg viewBox="0 0 24 24" width="18" height="18" {...props}>
       <path
         fill="#4285F4"
         d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z"
@@ -50,7 +50,7 @@ function LoginForm() {
     switch (errorCode) {
       case "OAuthSignin":
       case "OAuthCallback":
-        return "Could not connect to Google. Please check your credentials and try again.";
+        return "Could not connect to Google. Please check your network and credentials.";
       case "OAuthCreateAccount":
         return "Could not create user account. Please try again.";
       case "EmailCreateAccount":
@@ -58,7 +58,7 @@ function LoginForm() {
       case "Callback":
         return "Authentication callback failed. Please try again.";
       case "AccessDenied":
-        return "Access denied. You do not have permission to sign in.";
+        return "Access was denied by the identity provider.";
       default:
         return "An unexpected authentication error occurred. Please try again.";
     }
@@ -69,28 +69,29 @@ function LoginForm() {
   return (
     <div className="w-full max-w-md">
       <div className="relative rounded-2xl border border-zinc-800 bg-zinc-900/90 p-8 shadow-2xl backdrop-blur-xl">
-        {/* Glow accent */}
-        <div className="absolute -top-12 left-1/2 -translate-x-1/2 h-24 w-48 bg-blue-500/20 blur-3xl pointer-events-none rounded-full" />
+        {/* Subtle accent glow */}
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 h-20 w-40 bg-blue-600/20 blur-3xl pointer-events-none rounded-full" />
 
-        {/* Branding */}
+        {/* Branding & Header */}
         <div className="flex flex-col items-center text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600/10 border border-blue-500/20 text-blue-400 mb-4 shadow-inner">
             <CheckSquare className="h-6 w-6 text-blue-400" />
           </div>
-          <span className="text-xs font-semibold tracking-wider uppercase text-blue-400 mb-1">
-            TaskFlow
-          </span>
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-0.5 text-[11px] font-medium text-zinc-400 mb-2">
+            <Shield className="h-3 w-3 text-blue-400" />
+            <span>Secure Workspace Sign-in</span>
+          </div>
           <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
             Welcome to TaskFlow
           </h1>
-          <p className="mt-2 text-sm text-zinc-400">
-            Sign in to manage your tasks
+          <p className="mt-2 text-xs sm:text-sm text-zinc-400 max-w-xs">
+            Sign in to organize tasks, coordinate your team, and track real-time project progress.
           </p>
         </div>
 
-        {/* Error notification if any */}
+        {/* Error notification */}
         {errorMessage && (
-          <div className="mt-6 flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-300">
+          <div className="mt-6 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-300">
             <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
             <p className="leading-relaxed">{errorMessage}</p>
           </div>
@@ -102,23 +103,35 @@ function LoginForm() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={isLoading}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-zinc-700 bg-zinc-800/80 px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-zinc-750 hover:border-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer active:scale-[0.99]"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-zinc-700 bg-zinc-800/90 px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-zinc-750 hover:border-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer active:scale-[0.99]"
           >
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
             ) : (
               <GoogleIcon />
             )}
-            <span>{isLoading ? "Signing in..." : "Continue with Google"}</span>
+            <span>{isLoading ? "Connecting to Google..." : "Continue with Google"}</span>
           </button>
         </div>
 
-        {/* Security & Terms notice */}
-        <div className="mt-8 border-t border-zinc-800/80 pt-6 text-center">
-          <p className="text-xs text-zinc-500">
-            By signing in, you agree to TaskFlow&apos;s terms of service and privacy policy.
+        {/* Trust features */}
+        <div className="mt-8 grid grid-cols-2 gap-2 border-t border-zinc-800/80 pt-6 text-[11px] text-zinc-400">
+          <div className="flex items-center gap-2">
+            <Zap className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+            <span>Instant workspace sync</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+            <span>Role-based delegation</span>
+          </div>
+        </div>
+
+        {/* Navigation & Terms notice */}
+        <div className="mt-6 border-t border-zinc-800/80 pt-5 text-center">
+          <p className="text-[11px] text-zinc-500">
+            By signing in, you agree to TaskFlow&apos;s Terms of Service and Privacy Policy.
           </p>
-          <div className="mt-4">
+          <div className="mt-3">
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
@@ -135,10 +148,10 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="relative min-h-screen w-full bg-zinc-950 flex flex-col items-center justify-center p-4 selection:bg-blue-500/30 selection:text-white">
+    <div className="relative min-h-screen w-full bg-zinc-950 flex flex-col items-center justify-center p-4 selection:bg-blue-600/30 selection:text-white">
       {/* Background ambient lighting */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(59,130,246,0.15),rgba(255,255,255,0))]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_120%,rgba(120,119,198,0.1),rgba(255,255,255,0))]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(37,99,235,0.15),rgba(255,255,255,0))]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_120%,rgba(99,102,241,0.08),rgba(255,255,255,0))]" />
 
       <Suspense
         fallback={

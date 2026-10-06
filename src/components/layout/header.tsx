@@ -1,0 +1,96 @@
+"use client";
+
+import { Menu, Plus, RefreshCw } from "lucide-react";
+import { WorkspaceView } from "./sidebar";
+import { LogoutButton } from "@/app/dashboard/logout-button";
+
+interface HeaderProps {
+  activeView: WorkspaceView;
+  onOpenMobileMenu: () => void;
+  onCreateTaskClick: () => void;
+  onRefreshClick: () => void;
+  isRefreshing: boolean;
+}
+
+export function Header({
+  activeView,
+  onOpenMobileMenu,
+  onCreateTaskClick,
+  onRefreshClick,
+  isRefreshing,
+}: HeaderProps) {
+  const getViewTitle = () => {
+    switch (activeView) {
+      case "dashboard":
+        return "Dashboard";
+      case "tasks":
+        return "All Tasks";
+      case "assigned":
+        return "Assigned to Me";
+      case "created":
+        return "Created by Me";
+      case "completed":
+        return "Completed Tasks";
+      case "team":
+        return "Team & Members";
+      case "settings":
+        return "Settings";
+    }
+  };
+
+  return (
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-zinc-800/80 bg-zinc-950/80 px-4 sm:px-6 backdrop-blur-md">
+      {/* Left: Mobile hamburger + Breadcrumbs */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onOpenMobileMenu}
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white md:hidden cursor-pointer"
+          aria-label="Open sidebar"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-zinc-500 font-medium hidden sm:inline">Workspace</span>
+          <span className="text-zinc-600 hidden sm:inline">/</span>
+          <span className="font-semibold text-white text-sm sm:text-xs">
+            {getViewTitle()}
+          </span>
+        </div>
+      </div>
+
+      {/* Right: Actions */}
+      <div className="flex items-center gap-3">
+        {/* Refresh button */}
+        <button
+          type="button"
+          onClick={onRefreshClick}
+          disabled={isRefreshing}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors cursor-pointer disabled:opacity-50"
+          title="Refresh workspace tasks"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin text-blue-400" : ""}`} />
+        </button>
+
+        {/* Global Create Task button */}
+        <button
+          type="button"
+          onClick={onCreateTaskClick}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-blue-500 cursor-pointer active:scale-[0.98]"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Create Task</span>
+          <span className="sm:hidden">New</span>
+        </button>
+
+        <div className="h-4 w-px bg-zinc-800 mx-1 hidden sm:block" />
+
+        {/* User Mini Avatar & Logout */}
+        <div className="hidden sm:flex items-center gap-3">
+          <LogoutButton />
+        </div>
+      </div>
+    </header>
+  );
+}

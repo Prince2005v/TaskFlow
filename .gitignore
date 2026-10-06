@@ -1,8 +1,33 @@
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# Testing & build outputs
 .next/
 out/
+build/
+dist/
+
+# Environment files (NEVER commit secrets)
 .env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
 .env*.local
+
+# Exception: allow .env.example
+!.env.example
+
+# OS and IDE files
 .DS_Store
+*.pem
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.idea/
+.vscode/
+*.tsbuildinfo
+next-env.d.ts
