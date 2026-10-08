@@ -11,6 +11,7 @@ import {
   Calendar,
   Sparkles,
   TrendingUp,
+  UserCheck,
 } from "lucide-react";
 import { TaskStatus, TaskPriority } from "@prisma/client";
 import { TaskWithUsers } from "@/types/task";
@@ -18,6 +19,7 @@ import { TaskWithUsers } from "@/types/task";
 interface OverviewMetricsProps {
   tasks: TaskWithUsers[];
   userName: string;
+  currentUserId: string;
   onCreateTaskClick: () => void;
   onSelectTask: (task: TaskWithUsers) => void;
   onViewAllTasksClick: () => void;
@@ -26,6 +28,7 @@ interface OverviewMetricsProps {
 export function OverviewMetrics({
   tasks,
   userName,
+  currentUserId,
   onCreateTaskClick,
   onSelectTask,
   onViewAllTasksClick,
@@ -38,7 +41,7 @@ export function OverviewMetrics({
     return "Good evening";
   }, []);
 
-  // Compute real metrics directly from database tasks
+  // Compute live metrics from database tasks
   const metrics = useMemo(() => {
     const total = tasks.length;
     let pending = 0;
@@ -77,7 +80,23 @@ export function OverviewMetrics({
     };
   }, [tasks]);
 
-  // Recent 5 tasks sorted by creation date
+  // Overdue tasks list
+  const overdueTasks = useMemo(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    return tasks.filter((t) => {
+      if (t.status === TaskStatus.COMPLETED || !t.dueDate) return false;
+      return new Date(t.dueDate).toISOString().split("T")[0] < todayStr;
+    });
+  }, [tasks]);
+
+  // Tasks assigned to me
+  const myAssignedTasks = useMemo(() => {
+    return tasks
+      .filter((t) => t.assignedToId === currentUserId && t.status !== TaskStatus.COMPLETED)
+      .slice(0, 4);
+  }, [tasks, currentUserId]);
+
+  // Recent tasks
   const recentTasks = useMemo(() => {
     return [...tasks]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -135,25 +154,25 @@ export function OverviewMetrics({
 
   return (
     <div className="space-y-8">
-      {/* Header Greeting & Primary Action */}
+      {/* Greeting Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-zinc-800/60">
         <div>
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-blue-400 mb-1">
             <Sparkles className="h-3.5 w-3.5" />
-            <span>Executive Workspace</span>
+            <span>Workspace Executive Dashboard</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
             {greeting}, {userName}
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-zinc-400">
-            Here&apos;s what&apos;s happening with your work today.
+            Here&apos;s an overview of your team&apos;s work today.
           </p>
         </div>
 
         <button
           type="button"
           onClick={onCreateTaskClick}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-500 cursor-pointer self-start sm:self-auto active:scale-[0.98]"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-500 transition-all cursor-pointer self-start sm:self-auto active:scale-[0.98]"
         >
           <Plus className="h-4 w-4" />
           <span>+ Create task</span>
@@ -227,42 +246,38 @@ export function OverviewMetrics({
               {metrics.overdue}
             </span>
             <p className="mt-1 text-[11px] text-zinc-500">
-              {metrics.overdue > 0 ? "Requires immediate attention" : "All deliverables on schedule"}
+              {metrics.overdue > 0 ? "Requires urgent attention" : "Deliverables on schedule"}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Task Overview Progress Breakdown */}
+      {/* Progress Breakdown */}
       <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-blue-400" />
-            <h3 className="text-sm font-semibold text-white">Task Overview &amp; Health</h3>
+            <h3 className="text-sm font-semibold text-white">Task Completion Progress</h3>
           </div>
           <span className="text-xs text-zinc-400">
-            {metrics.completed} of {metrics.total} tasks completed ({metrics.completionRate}%)
+            {metrics.completed} of {metrics.total} deliverables done ({metrics.completionRate}%)
           </span>
         </div>
 
-        {/* Segmented Progress Bar */}
-        <div className="h-2.5 w-full rounded-full bg-zinc-800/90 overflow-hidden flex">
+        <div className="h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden flex">
           {metrics.total > 0 ? (
             <>
               <div
                 style={{ width: `${(metrics.completed / metrics.total) * 100}%` }}
                 className="bg-emerald-500 transition-all duration-500"
-                title={`Completed: ${metrics.completed}`}
               />
               <div
                 style={{ width: `${(metrics.inProgress / metrics.total) * 100}%` }}
                 className="bg-blue-500 transition-all duration-500"
-                title={`In Progress: ${metrics.inProgress}`}
               />
               <div
                 style={{ width: `${(metrics.pending / metrics.total) * 100}%` }}
                 className="bg-amber-500/80 transition-all duration-500"
-                title={`Pending: ${metrics.pending}`}
               />
             </>
           ) : (
@@ -270,7 +285,6 @@ export function OverviewMetrics({
           )}
         </div>
 
-        {/* Legend */}
         <div className="mt-4 flex flex-wrap items-center gap-5 text-xs text-zinc-400">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -293,73 +307,144 @@ export function OverviewMetrics({
         </div>
       </div>
 
-      {/* Recent Tasks Section */}
-      <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-6 shadow-sm">
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-          <div>
-            <h3 className="text-sm font-semibold text-white">Recent Tasks</h3>
-            <p className="text-xs text-zinc-400">Latest active deliverables across workspace</p>
+      {/* Overdue Tasks Alert Section (Goal 5 & 10) */}
+      {overdueTasks.length > 0 && (
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/5 p-5 shadow-sm">
+          <div className="flex items-center justify-between pb-3 border-b border-rose-500/20">
+            <div className="flex items-center gap-2 text-rose-400">
+              <AlertTriangle className="h-4 w-4" />
+              <h3 className="text-sm font-semibold">Overdue Deliverables ({overdueTasks.length})</h3>
+            </div>
+            <span className="text-xs text-rose-300">Action Required</span>
           </div>
-          <button
-            type="button"
-            onClick={onViewAllTasksClick}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
-          >
-            <span>View all tasks</span>
-            <ArrowRight className="h-3.5 w-3.5" />
-          </button>
+
+          <div className="mt-3 divide-y divide-rose-500/10">
+            {overdueTasks.map((t) => (
+              <div
+                key={t.id}
+                onClick={() => onSelectTask(t)}
+                className="py-2.5 flex items-center justify-between gap-3 hover:bg-rose-500/10 px-2 rounded-lg transition-colors cursor-pointer"
+              >
+                <div>
+                  <h4 className="text-xs font-semibold text-white hover:text-rose-400">
+                    {t.title}
+                  </h4>
+                  <span className="text-[11px] text-zinc-400">
+                    Assigned to: {t.assignedTo?.name || t.assignedTo?.email || "Unassigned"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  {getPriorityBadge(t.priority)}
+                  <span className="text-rose-400 text-[11px] font-semibold">
+                    Due {new Date(t.dueDate!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
 
-        {recentTasks.length > 0 ? (
-          <div className="mt-4 divide-y divide-zinc-800/60">
-            {recentTasks.map((t) => {
-              const formattedDate = t.dueDate
-                ? new Date(t.dueDate).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  })
-                : "No due date";
+      {/* Two Column Section: My Tasks vs Recent Tasks */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* My Tasks Preview */}
+        <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-6 shadow-sm">
+          <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+            <div className="flex items-center gap-2">
+              <UserCheck className="h-4 w-4 text-emerald-400" />
+              <div>
+                <h3 className="text-sm font-semibold text-white">Assigned to Me</h3>
+                <p className="text-xs text-zinc-400">Your direct active assignments</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onViewAllTasksClick}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              View all
+            </button>
+          </div>
 
-              return (
+          {myAssignedTasks.length > 0 ? (
+            <div className="mt-4 divide-y divide-zinc-800/60">
+              {myAssignedTasks.map((t) => (
                 <div
                   key={t.id}
                   onClick={() => onSelectTask(t)}
-                  className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-zinc-800/30 px-2 rounded-xl transition-colors cursor-pointer group"
+                  className="py-3 flex items-center justify-between gap-3 hover:bg-zinc-800/30 px-2 rounded-xl transition-colors cursor-pointer group"
                 >
-                  <div className="flex items-start sm:items-center gap-3">
-                    <div>
-                      <h4 className="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors">
-                        {t.title}
-                      </h4>
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500">
-                        <span>Created by {t.createdBy?.name || t.createdBy?.email}</span>
-                        {t.assignedTo && (
-                          <>
-                            <span>&bull;</span>
-                            <span>Assigned to {t.assignedTo.name || t.assignedTo.email}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 self-end sm:self-auto text-xs">
-                    {getPriorityBadge(t.priority)}
-                    {getStatusBadge(t.status)}
-                    <span className="text-zinc-500 text-[11px] flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {formattedDate}
+                  <div className="truncate mr-2">
+                    <h4 className="text-xs font-semibold text-white group-hover:text-blue-400 truncate">
+                      {t.title}
+                    </h4>
+                    <span className="text-[11px] text-zinc-500">
+                      {t.dueDate ? `Due ${new Date(t.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "No due date"}
                     </span>
                   </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {getPriorityBadge(t.priority)}
+                    {getStatusBadge(t.status)}
+                  </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-xs text-zinc-500">
+              You have no active pending tasks assigned.
+            </div>
+          )}
+        </div>
+
+        {/* Recent Tasks Preview */}
+        <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-6 shadow-sm">
+          <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-400" />
+              <div>
+                <h3 className="text-sm font-semibold text-white">Recent Team Tasks</h3>
+                <p className="text-xs text-zinc-400">Latest deliverables across workspace</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onViewAllTasksClick}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
+            >
+              <span>Explore all</span>
+              <ArrowRight className="h-3 w-3" />
+            </button>
           </div>
-        ) : (
-          <div className="py-12 text-center text-xs text-zinc-500">
-            No recent tasks yet. Click &quot;+ Create task&quot; above to get started.
-          </div>
-        )}
+
+          {recentTasks.length > 0 ? (
+            <div className="mt-4 divide-y divide-zinc-800/60">
+              {recentTasks.map((t) => (
+                <div
+                  key={t.id}
+                  onClick={() => onSelectTask(t)}
+                  className="py-3 flex items-center justify-between gap-3 hover:bg-zinc-800/30 px-2 rounded-xl transition-colors cursor-pointer group"
+                >
+                  <div className="truncate mr-2">
+                    <h4 className="text-xs font-semibold text-white group-hover:text-blue-400 truncate">
+                      {t.title}
+                    </h4>
+                    <span className="text-[11px] text-zinc-500">
+                      By {t.createdBy?.name || t.createdBy?.email}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {getPriorityBadge(t.priority)}
+                    {getStatusBadge(t.status)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-12 text-center text-xs text-zinc-500">
+              No tasks created yet.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Search,
   Filter,
@@ -32,13 +32,91 @@ export function TaskTable({
   onCreateTaskClick,
   emptyMessage = "No tasks found in this view",
 }: TaskTableProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
-  const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
-  const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
-  const [sortBy, setSortBy] = useState<"created_desc" | "created_asc" | "due_asc" | "priority_desc">(
-    "created_desc"
-  );
+  // Initialize state from URL params if available
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("q") || "";
+    }
+    return "";
+  });
+  const [statusFilter, setStatusFilter] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("status") || "ALL";
+    }
+    return "ALL";
+  });
+  const [priorityFilter, setPriorityFilter] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("priority") || "ALL";
+    }
+    return "ALL";
+  });
+  const [assigneeFilter, setAssigneeFilter] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("assignee") || "ALL";
+    }
+    return "ALL";
+  });
+  const [dueDateFilter, setDueDateFilter] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("due") || "ALL";
+    }
+    return "ALL";
+  });
+  const [sortBy, setSortBy] = useState<
+    "created_desc" | "created_asc" | "due_asc" | "due_desc" | "priority_desc" | "priority_asc" | "updated_desc"
+  >(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      const s = p.get("sort");
+      if (
+        s &&
+        [
+          "created_desc",
+          "created_asc",
+          "due_asc",
+          "due_desc",
+          "priority_desc",
+          "priority_asc",
+          "updated_desc",
+        ].includes(s)
+      ) {
+        return s as "created_desc" | "created_asc" | "due_asc" | "due_desc" | "priority_desc" | "priority_asc" | "updated_desc";
+      }
+    }
+    return "created_desc";
+  });
+
+  // Sync active filters to URL search params
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+
+    if (searchQuery.trim()) url.searchParams.set("q", searchQuery.trim());
+    else url.searchParams.delete("q");
+
+    if (statusFilter !== "ALL") url.searchParams.set("status", statusFilter);
+    else url.searchParams.delete("status");
+
+    if (priorityFilter !== "ALL") url.searchParams.set("priority", priorityFilter);
+    else url.searchParams.delete("priority");
+
+    if (assigneeFilter !== "ALL") url.searchParams.set("assignee", assigneeFilter);
+    else url.searchParams.delete("assignee");
+
+    if (dueDateFilter !== "ALL") url.searchParams.set("due", dueDateFilter);
+    else url.searchParams.delete("due");
+
+    if (sortBy !== "created_desc") url.searchParams.set("sort", sortBy);
+    else url.searchParams.delete("sort");
+
+    window.history.replaceState({}, "", url.toString());
+  }, [searchQuery, statusFilter, priorityFilter, assigneeFilter, dueDateFilter, sortBy]);
 
   // Filter and sort tasks
   const filteredAndSortedTasks = useMemo(() => {
@@ -75,6 +153,33 @@ export function TaskTable({
       }
     }
 
+    // Filter by due date
+    if (dueDateFilter !== "ALL") {
+      const now = new Date();
+      const todayStr = now.toISOString().split("T")[0];
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+      result = result.filter((t) => {
+        if (!t.dueDate) return false;
+        const dueStr = new Date(t.dueDate).toISOString().split("T")[0];
+
+        if (dueDateFilter === "OVERDUE") {
+          return t.status !== TaskStatus.COMPLETED && dueStr < todayStr;
+        }
+        if (dueDateFilter === "DUE_TODAY") {
+          return dueStr === todayStr;
+        }
+        if (dueDateFilter === "DUE_TOMORROW") {
+          return dueStr === tomorrowStr;
+        }
+        if (dueDateFilter === "UPCOMING") {
+          return dueStr > tomorrowStr;
+        }
+        return true;
+      });
+    }
+
     // Sorting
     result.sort((a, b) => {
       if (sortBy === "created_desc") {
@@ -88,6 +193,11 @@ export function TaskTable({
         if (!b.dueDate) return -1;
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       }
+      if (sortBy === "due_desc") {
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
+      }
       if (sortBy === "priority_desc") {
         const order: Record<TaskPriority, number> = {
           HIGH: 3,
@@ -96,23 +206,38 @@ export function TaskTable({
         };
         return order[b.priority] - order[a.priority];
       }
+      if (sortBy === "priority_asc") {
+        const order: Record<TaskPriority, number> = {
+          HIGH: 3,
+          MEDIUM: 2,
+          LOW: 1,
+        };
+        return order[a.priority] - order[b.priority];
+      }
+      if (sortBy === "updated_desc") {
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }
       return 0;
     });
 
     return result;
-  }, [tasks, searchQuery, statusFilter, priorityFilter, assigneeFilter, sortBy]);
+  }, [tasks, searchQuery, statusFilter, priorityFilter, assigneeFilter, dueDateFilter, sortBy]);
 
   const hasActiveFilters =
     searchQuery.trim() !== "" ||
     statusFilter !== "ALL" ||
     priorityFilter !== "ALL" ||
-    assigneeFilter !== "ALL";
+    assigneeFilter !== "ALL" ||
+    dueDateFilter !== "ALL" ||
+    sortBy !== "created_desc";
 
   const clearFilters = () => {
     setSearchQuery("");
     setStatusFilter("ALL");
     setPriorityFilter("ALL");
     setAssigneeFilter("ALL");
+    setDueDateFilter("ALL");
+    setSortBy("created_desc");
   };
 
   const getPriorityBadge = (p: TaskPriority) => {
@@ -200,15 +325,25 @@ export function TaskTable({
               value={sortBy}
               onChange={(e) =>
                 setSortBy(
-                  e.target.value as "created_desc" | "created_asc" | "due_asc" | "priority_desc"
+                  e.target.value as
+                    | "created_desc"
+                    | "created_asc"
+                    | "due_asc"
+                    | "due_desc"
+                    | "priority_desc"
+                    | "priority_asc"
+                    | "updated_desc"
                 )
               }
               className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200 outline-none focus:border-zinc-700 cursor-pointer"
             >
-              <option value="created_desc">Newest First</option>
-              <option value="created_asc">Oldest First</option>
-              <option value="due_asc">Due Date (Soonest)</option>
+              <option value="created_desc">Created (Newest First)</option>
+              <option value="created_asc">Created (Oldest First)</option>
+              <option value="due_asc">Due Date (Soonest First)</option>
+              <option value="due_desc">Due Date (Latest First)</option>
               <option value="priority_desc">Priority (High to Low)</option>
+              <option value="priority_asc">Priority (Low to High)</option>
+              <option value="updated_desc">Recently Updated</option>
             </select>
           </div>
         </div>
@@ -242,6 +377,19 @@ export function TaskTable({
             <option value={TaskPriority.HIGH}>High</option>
             <option value={TaskPriority.MEDIUM}>Medium</option>
             <option value={TaskPriority.LOW}>Low</option>
+          </select>
+
+          {/* Due Date Filter */}
+          <select
+            value={dueDateFilter}
+            onChange={(e) => setDueDateFilter(e.target.value)}
+            className="rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-300 outline-none focus:border-zinc-700 cursor-pointer"
+          >
+            <option value="ALL">All Due Dates</option>
+            <option value="OVERDUE">Overdue</option>
+            <option value="DUE_TODAY">Due Today</option>
+            <option value="DUE_TOMORROW">Due Tomorrow</option>
+            <option value="UPCOMING">Upcoming</option>
           </select>
 
           {/* Assignee Filter */}

@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TaskFlow - Task & Workflow Management",
-  description: "Modern, streamlined task management for teams and individuals.",
+  title: "TaskFlow AI — AI-Powered Team Productivity & Task Management",
+  description: "Transform natural language requests into structured projects, auto-assign tasks, analyze bottlenecks, and boost team momentum with AI.",
 };
 
 export default function RootLayout({

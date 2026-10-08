@@ -22,11 +22,11 @@ export default function Home() {
       <header className="sticky top-0 z-40 w-full border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/10 border border-blue-500/20 text-blue-400 group-hover:border-blue-500/40 transition-colors">
-              <CheckSquare className="h-5 w-5 text-blue-400" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600/20 to-blue-600/10 border border-violet-500/20 text-violet-400 group-hover:border-violet-500/40 transition-colors">
+              <CheckSquare className="h-5 w-5 text-violet-400" />
             </div>
             <span className="text-lg font-bold tracking-tight text-white">
-              TaskFlow
+              TaskFlow <span className="bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">AI</span>
             </span>
           </Link>
 
@@ -61,21 +61,20 @@ export default function Home() {
       <main className="relative z-10 flex-1">
         <section className="px-6 pt-24 pb-20 text-center sm:pt-32 sm:pb-28">
           <div className="mx-auto max-w-4xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3.5 py-1 text-xs font-medium text-blue-400 mb-6">
+            <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3.5 py-1 text-xs font-medium text-violet-400 mb-6">
               <Zap className="h-3.5 w-3.5" />
-              <span>Engineered for agile teams & fast-moving companies</span>
+              <span>AI-Powered Team Productivity &middot; Human-in-the-Loop Design</span>
             </div>
 
             <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-6xl sm:leading-[1.12]">
-              Work gets done when <br />
+              Your team&apos;s work,{" "}
               <span className="bg-gradient-to-r from-blue-400 via-sky-300 to-indigo-300 bg-clip-text text-transparent">
-                everyone knows what&apos;s next.
+                organized.
               </span>
             </h1>
 
             <p className="mt-6 text-base text-zinc-400 sm:text-lg max-w-2xl mx-auto leading-relaxed">
-              TaskFlow helps teams organize work, assign responsibilities, track progress,
-              and keep everyone informed automatically with real-time updates and smart notifications.
+              TaskFlow helps teams assign work, track progress and stay aligned without unnecessary complexity.
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -83,7 +82,7 @@ export default function Home() {
                 href="/login"
                 className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-500 active:scale-[0.99]"
               >
-                <span>Get started</span>
+                <span>Get Started</span>
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <a
@@ -193,7 +192,7 @@ export default function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
                 <span className="text-xs font-mono font-bold text-blue-400">01</span>
-                <h4 className="text-sm font-semibold text-white">Create a task</h4>
+                <h4 className="text-sm font-semibold text-white">Create</h4>
                 <p className="text-xs text-zinc-400">
                   Define title, description, priority level, and target due date in seconds.
                 </p>
@@ -201,7 +200,7 @@ export default function Home() {
 
               <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
                 <span className="text-xs font-mono font-bold text-emerald-400">02</span>
-                <h4 className="text-sm font-semibold text-white">Assign it</h4>
+                <h4 className="text-sm font-semibold text-white">Assign</h4>
                 <p className="text-xs text-zinc-400">
                   Select any registered teammate from the dropdown to designate clear ownership.
                 </p>
@@ -209,7 +208,7 @@ export default function Home() {
 
               <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
                 <span className="text-xs font-mono font-bold text-amber-400">03</span>
-                <h4 className="text-sm font-semibold text-white">Track progress</h4>
+                <h4 className="text-sm font-semibold text-white">Track</h4>
                 <p className="text-xs text-zinc-400">
                   Move items through Pending, In Progress, and Completed with interactive status badges.
                 </p>
@@ -217,9 +216,9 @@ export default function Home() {
 
               <div className="flex flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
                 <span className="text-xs font-mono font-bold text-purple-400">04</span>
-                <h4 className="text-sm font-semibold text-white">Get notified</h4>
+                <h4 className="text-sm font-semibold text-white">Complete</h4>
                 <p className="text-xs text-zinc-400">
-                  Automated Gmail notifications inform assignees on creation and creators upon completion.
+                  Verify deliverables and automatically notify teammates with real-time updates.
                 </p>
               </div>
             </div>

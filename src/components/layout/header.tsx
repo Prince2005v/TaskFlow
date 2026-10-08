@@ -1,8 +1,10 @@
 "use client";
 
-import { Menu, Plus, RefreshCw } from "lucide-react";
+import { Menu, Plus, RefreshCw, Search } from "lucide-react";
 import { WorkspaceView } from "./sidebar";
 import { LogoutButton } from "@/app/dashboard/logout-button";
+import { NotificationCenter } from "@/components/notifications/notification-center";
+import { InAppNotification } from "@/types/task";
 
 interface HeaderProps {
   activeView: WorkspaceView;
@@ -10,6 +12,9 @@ interface HeaderProps {
   onCreateTaskClick: () => void;
   onRefreshClick: () => void;
   isRefreshing: boolean;
+  onOpenCommandPalette?: () => void;
+  initialNotifications?: InAppNotification[];
+  onNotificationTaskSelect?: (taskId: string) => void;
 }
 
 export function Header({
@@ -18,6 +23,9 @@ export function Header({
   onCreateTaskClick,
   onRefreshClick,
   isRefreshing,
+  onOpenCommandPalette,
+  initialNotifications,
+  onNotificationTaskSelect,
 }: HeaderProps) {
   const getViewTitle = () => {
     switch (activeView) {
@@ -35,6 +43,12 @@ export function Header({
         return "Team & Members";
       case "settings":
         return "Settings";
+      case "ai-planner":
+        return "AI Planner";
+      case "ai-insights":
+        return "AI Insights";
+      case "ai-report":
+        return "AI Weekly Report";
     }
   };
 
@@ -61,7 +75,34 @@ export function Header({
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        {/* Search trigger button (⌘K) */}
+        {onOpenCommandPalette && (
+          <button
+            type="button"
+            onClick={onOpenCommandPalette}
+            className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 px-2.5 py-1.5 text-xs text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors cursor-pointer"
+            title="Open command palette (Cmd+K)"
+          >
+            <Search className="h-3.5 w-3.5 text-zinc-400" />
+            <span className="hidden sm:inline">Search...</span>
+            <kbd className="hidden sm:inline rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 border border-zinc-700">⌘K</kbd>
+          </button>
+        )}
+
+        {/* In-app Notification Center Bell */}
+        <NotificationCenter
+          initialNotifications={initialNotifications || []}
+          onNotificationClick={(link) => {
+            if (link && onNotificationTaskSelect) {
+              const match = link.match(/#task-([a-zA-Z0-9_-]+)/);
+              if (match) {
+                onNotificationTaskSelect(match[1]);
+              }
+            }
+          }}
+        />
+
         {/* Refresh button */}
         <button
           type="button"
@@ -77,7 +118,7 @@ export function Header({
         <button
           type="button"
           onClick={onCreateTaskClick}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-blue-500 cursor-pointer active:scale-[0.98]"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-blue-500 cursor-pointer active:scale-[0.98]"
         >
           <Plus className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Create Task</span>

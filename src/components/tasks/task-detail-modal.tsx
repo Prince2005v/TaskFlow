@@ -12,16 +12,28 @@ import {
   Trash2,
   Save,
   Loader2,
+  Send,
+  MessageSquare,
+  History,
+  AlertTriangle,
+  User as UserIcon,
+  Flag,
+  Sparkles,
 } from "lucide-react";
-import { TaskStatus, TaskPriority } from "@prisma/client";
-import { TaskWithUsers, SafeUser } from "@/types/task";
+import { TaskStatus, TaskPriority, WorkspaceRole } from "@prisma/client";
+import { TaskWithUsers, SafeUser, TaskActivityItem, TaskCommentItem } from "@/types/task";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { AIBreakdownButton } from "@/components/ai/ai-breakdown-button";
+import { AIPriorityButton } from "@/components/ai/ai-priority-button";
+import { AIDeadlineButton } from "@/components/ai/ai-deadline-button";
+import { AISummaryButton } from "@/components/ai/ai-summary-button";
 
 interface TaskDetailModalProps {
   task: TaskWithUsers | null;
   isOpen: boolean;
   onClose: () => void;
   currentUserId: string;
+  workspaceRole: WorkspaceRole;
   users: SafeUser[];
   onTaskUpdated: (updatedTask: TaskWithUsers) => void;
   onTaskDeleted: (taskId: string) => void;
@@ -88,7 +100,7 @@ function TaskEditForm({ task, users, currentUserId, onCancel, onSaved }: TaskEdi
   };
 
   return (
-    <form onSubmit={handleSave} className="mt-5 space-y-4">
+    <form onSubmit={handleSave} className="space-y-4">
       <div>
         <label className="block text-xs font-medium text-zinc-300 mb-1.5">
           Title <span className="text-rose-400">*</span>
@@ -109,7 +121,7 @@ function TaskEditForm({ task, users, currentUserId, onCancel, onSaved }: TaskEdi
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          rows={4}
+          rows={3}
           className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-zinc-700 focus:ring-2 focus:ring-blue-500/40 resize-none"
         />
       </div>
@@ -177,7 +189,7 @@ function TaskEditForm({ task, users, currentUserId, onCancel, onSaved }: TaskEdi
         </select>
       </div>
 
-      <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+      <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
         <button
           type="button"
           onClick={onCancel}
@@ -213,6 +225,7 @@ export function TaskDetailModal({
   isOpen,
   onClose,
   currentUserId,
+  workspaceRole,
   users,
   onTaskUpdated,
   onTaskDeleted,
@@ -220,6 +233,24 @@ export function TaskDetailModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Tabs for bottom section: Comments vs Activity
+  const [activeTab, setActiveTab] = useState<"comments" | "activity">("comments");
+  const [commentInput, setCommentInput] = useState("");
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  // Local state for comments and activities
+  const [comments, setComments] = useState<TaskCommentItem[]>(task?.comments || []);
+  const [activities, setActivities] = useState<TaskActivityItem[]>(task?.activities || []);
+
+  // Update comments and activities if task changes
+  useEffect(() => {
+    if (task) {
+      setComments(task.comments || []);
+      setActivities(task.activities || []);
+      setIsEditing(false);
+    }
+  }, [task]);
 
   // Handle escape key
   useEffect(() => {
@@ -236,9 +267,12 @@ export function TaskDetailModal({
 
   const isCreator = task.createdById === currentUserId;
   const isAssignee = task.assignedToId === currentUserId;
-  const canUpdateStatus = isCreator || isAssignee;
+  const isManager =
+    workspaceRole === WorkspaceRole.OWNER || workspaceRole === WorkspaceRole.ADMIN;
+  const canModifyDetails = isCreator || isManager;
+  const canUpdateStatus = isCreator || isAssignee || isManager;
 
-  // Quick status update from detail view
+  // Handle Status Update
   const handleStatusChange = async (newStatus: TaskStatus) => {
     if (newStatus === task.status || !canUpdateStatus) return;
 
@@ -252,15 +286,21 @@ export function TaskDetailModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update status");
 
-      toast.success(`Task status updated to ${newStatus.replace("_", " ")}`);
+      toast.success(`Status updated to ${newStatus.replace("_", " ")}`);
 
-      if (newStatus === TaskStatus.COMPLETED && data.notification) {
-        if (data.notification.sent) {
-          toast.success("Creator notified by email.", { duration: 4000 });
-        } else {
-          toast.info("Task completed. Email notification could not be delivered.", { duration: 4000 });
-        }
-      }
+      // Add activity entry locally
+      const newActivity: TaskActivityItem = {
+        id: `temp-${Date.now()}`,
+        taskId: task.id,
+        userId: currentUserId,
+        user: { id: currentUserId, name: "You", email: "", image: null },
+        action: "STATUS_CHANGED",
+        details: `You changed status to ${newStatus.replace("_", " ")}`,
+        oldValue: task.status,
+        newValue: newStatus,
+        createdAt: new Date().toISOString(),
+      };
+      setActivities((prev) => [newActivity, ...prev]);
 
       onTaskUpdated(data.task);
     } catch (err: unknown) {
@@ -269,9 +309,36 @@ export function TaskDetailModal({
     }
   };
 
+  // Handle Add Comment
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentInput.trim() || isSubmittingComment) return;
+
+    setIsSubmittingComment(true);
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: commentInput.trim() }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to post comment");
+
+      setComments((prev) => [...prev, data.comment]);
+      setCommentInput("");
+      toast.success("Comment added");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to add comment";
+      toast.error(message);
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
   // Delete task action
   const handleDeleteConfirm = async () => {
-    if (!isCreator) return;
+    if (!canModifyDetails) return;
     setIsDeleting(true);
 
     try {
@@ -323,7 +390,7 @@ export function TaskDetailModal({
   // Due date check
   let isOverdue = false;
   let isDueToday = false;
-  let formattedDueDate = "No due date set";
+  let formattedDueDate = "No due date";
   if (task.dueDate) {
     const d = new Date(task.dueDate);
     formattedDueDate = d.toLocaleDateString("en-US", {
@@ -343,51 +410,35 @@ export function TaskDetailModal({
     }
   }
 
-  const formattedCreatedAt = new Date(task.createdAt).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  const formattedUpdatedAt = new Date(task.updatedAt).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in-0 duration-150">
         <div
-          className="relative w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto"
+          className="relative w-full max-w-3xl rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto flex flex-col"
           role="dialog"
           aria-modal="true"
         >
-          {/* Header */}
-          <div className="flex items-start justify-between pb-4 border-b border-zinc-800">
-            <div className="flex items-center gap-2">
+          {/* Header Bar */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-950/70 sticky top-0 z-10">
+            <div className="flex items-center gap-2.5">
               {getPriorityBadge(task.priority)}
-              <span className="rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-0.5 text-xs text-zinc-400">
+              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-0.5 text-xs font-medium text-zinc-300">
                 {task.status.replace("_", " ")}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
-              {isCreator && !isEditing && (
+              {canModifyDetails && !isEditing && (
                 <button
                   type="button"
                   onClick={() => setIsEditing(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors cursor-pointer"
                 >
                   <Edit2 className="h-3 w-3" />
                   <span>Edit</span>
                 </button>
               )}
-              {isCreator && (
+              {canModifyDetails && (
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
@@ -407,197 +458,352 @@ export function TaskDetailModal({
             </div>
           </div>
 
-          {/* Body: View Mode or Edit Form */}
-          {isEditing ? (
-            <TaskEditForm
-              key={`${task.id}-${task.updatedAt}`}
-              task={task}
-              users={users}
-              currentUserId={currentUserId}
-              onCancel={() => setIsEditing(false)}
-              onSaved={(updated) => {
-                onTaskUpdated(updated);
-                setIsEditing(false);
-              }}
-            />
-          ) : (
-            <div className="mt-5 space-y-6">
-              {/* Title & Description */}
-              <div>
-                <h1 className="text-xl font-bold text-white tracking-tight leading-snug">
-                  {task.title}
-                </h1>
-                {task.description ? (
-                  <p className="mt-3 text-xs sm:text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap bg-zinc-950/60 rounded-xl p-4 border border-zinc-800/80">
-                    {task.description}
-                  </p>
-                ) : (
-                  <p className="mt-3 text-xs text-zinc-500 italic bg-zinc-950/40 rounded-xl p-3 border border-dashed border-zinc-800">
-                    No description provided.
-                  </p>
-                )}
-              </div>
-
-              {/* Status Update Control */}
-              <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                    Workflow Status
-                  </span>
-                  {!canUpdateStatus && (
-                    <span className="text-[11px] text-zinc-500">
-                      Read-only (only creator or assignee can update status)
-                    </span>
+          {/* Modal Body */}
+          <div className="p-6 space-y-6">
+            {isEditing ? (
+              <TaskEditForm
+                key={`${task.id}-${task.updatedAt}`}
+                task={task}
+                users={users}
+                currentUserId={currentUserId}
+                onCancel={() => setIsEditing(false)}
+                onSaved={(updated) => {
+                  onTaskUpdated(updated);
+                  setIsEditing(false);
+                }}
+              />
+            ) : (
+              <>
+                {/* Title & Description */}
+                <div>
+                  <h1 className="text-xl font-bold text-white tracking-tight leading-snug">
+                    {task.title}
+                  </h1>
+                  {task.description ? (
+                    <p className="mt-3 text-xs sm:text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap bg-zinc-950/60 rounded-xl p-4 border border-zinc-800/80">
+                      {task.description}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-xs text-zinc-500 italic bg-zinc-950/40 rounded-xl p-3 border border-dashed border-zinc-800">
+                      No description provided.
+                    </p>
                   )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleStatusChange(TaskStatus.PENDING)}
-                    disabled={!canUpdateStatus || task.status === TaskStatus.PENDING}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-3 text-xs font-medium transition-all ${
-                      task.status === TaskStatus.PENDING
-                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
-                        : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
-                    }`}
-                  >
-                    <CircleDashed className="h-3.5 w-3.5" />
-                    <span>Pending</span>
-                  </button>
+                {/* Status Switcher */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+                      Workflow Status
+                    </span>
+                    {!canUpdateStatus && (
+                      <span className="text-[11px] text-zinc-500">
+                        Read-only
+                      </span>
+                    )}
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleStatusChange(TaskStatus.IN_PROGRESS)}
-                    disabled={!canUpdateStatus || task.status === TaskStatus.IN_PROGRESS}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-3 text-xs font-medium transition-all ${
-                      task.status === TaskStatus.IN_PROGRESS
-                        ? "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm"
-                        : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
-                    }`}
-                  >
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>In Progress</span>
-                  </button>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange(TaskStatus.PENDING)}
+                      disabled={!canUpdateStatus || task.status === TaskStatus.PENDING}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-3 text-xs font-medium transition-all ${
+                        task.status === TaskStatus.PENDING
+                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                          : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
+                      }`}
+                    >
+                      <CircleDashed className="h-3.5 w-3.5" />
+                      <span>Pending</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleStatusChange(TaskStatus.COMPLETED)}
-                    disabled={!canUpdateStatus || task.status === TaskStatus.COMPLETED}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-3 text-xs font-medium transition-all ${
-                      task.status === TaskStatus.COMPLETED
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
-                        : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
-                    }`}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Completed</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange(TaskStatus.IN_PROGRESS)}
+                      disabled={!canUpdateStatus || task.status === TaskStatus.IN_PROGRESS}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-3 text-xs font-medium transition-all ${
+                        task.status === TaskStatus.IN_PROGRESS
+                          ? "bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm"
+                          : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
+                      }`}
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>In Progress</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange(TaskStatus.COMPLETED)}
+                      disabled={!canUpdateStatus || task.status === TaskStatus.COMPLETED}
+                      className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-3 text-xs font-medium transition-all ${
+                        task.status === TaskStatus.COMPLETED
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
+                          : "border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
+                      }`}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>Completed</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Task Metadata Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                {/* Assignee */}
-                <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3.5">
-                  <span className="text-zinc-500 block mb-1.5">Assignee</span>
-                  {task.assignedTo ? (
-                    <div className="flex items-center gap-2.5">
-                      {task.assignedTo.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={task.assignedTo.image}
-                          alt={task.assignedTo.name || "User"}
-                          className="h-6 w-6 rounded-full border border-zinc-700 object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-bold text-zinc-300">
-                          {(task.assignedTo.name || task.assignedTo.email).slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                      <div>
-                        <span className="font-medium text-white block">
+                {/* Metadata Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  {/* Assignee */}
+                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3.5">
+                    <span className="text-zinc-500 block mb-1">Assignee</span>
+                    {task.assignedTo ? (
+                      <div className="flex items-center gap-2">
+                        {task.assignedTo.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={task.assignedTo.image}
+                            alt="User"
+                            className="h-5 w-5 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-bold text-zinc-300">
+                            {(task.assignedTo.name || task.assignedTo.email).slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="font-medium text-white truncate">
                           {task.assignedTo.name || task.assignedTo.email}
                         </span>
-                        <span className="text-[11px] text-zinc-400">
-                          {task.assignedTo.email}
-                        </span>
                       </div>
+                    ) : (
+                      <span className="text-zinc-400">Unassigned</span>
+                    )}
+                  </div>
+
+                  {/* Due Date */}
+                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3.5">
+                    <span className="text-zinc-500 block mb-1">Due Date</span>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                      <span className="font-medium text-white">{formattedDueDate}</span>
+                      {isOverdue && (
+                        <span className="rounded bg-rose-500/20 px-1.5 py-0.2 text-[10px] font-semibold text-rose-400">
+                          Overdue
+                        </span>
+                      )}
+                      {isDueToday && (
+                        <span className="rounded bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-semibold text-amber-400">
+                          Today
+                        </span>
+                      )}
                     </div>
-                  ) : (
-                    <span className="text-zinc-400">Unassigned</span>
+                  </div>
+
+                  {/* Creator */}
+                  <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3.5">
+                    <span className="text-zinc-500 block mb-1">Creator</span>
+                    <span className="font-medium text-white truncate block">
+                      {task.createdBy.name || task.createdBy.email}
+                    </span>
+                  </div>
+                </div>
+
+                {/* ✨ AI Actions Section */}
+                <div className="rounded-xl border border-violet-500/10 bg-zinc-950/40 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-violet-400">
+                      AI Actions
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    <AISummaryButton taskId={task.id} />
+                    <AIPriorityButton
+                      taskId={task.id}
+                      currentPriority={task.priority}
+                      onApplyPriority={async (priority) => {
+                        const res = await fetch(`/api/tasks/${task.id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ priority }),
+                        });
+                        if (!res.ok) throw new Error("Failed to update priority");
+                        const data = await res.json();
+                        onTaskUpdated(data.task);
+                      }}
+                    />
+                    <AIDeadlineButton
+                      taskId={task.id}
+                      onApplyDeadline={async (date) => {
+                        const res = await fetch(`/api/tasks/${task.id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ dueDate: date }),
+                        });
+                        if (!res.ok) throw new Error("Failed to update deadline");
+                        const data = await res.json();
+                        onTaskUpdated(data.task);
+                      }}
+                    />
+                    <AIBreakdownButton
+                      taskId={task.id}
+                      taskTitle={task.title}
+                      onSubtasksCreated={() => {
+                        toast.success("Subtasks added — refresh to see them in the task list");
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Bottom Section Tabs: Comments & Activity History */}
+                <div className="pt-4 border-t border-zinc-800">
+                  <div className="flex items-center gap-4 border-b border-zinc-800 pb-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("comments")}
+                      className={`flex items-center gap-1.5 font-semibold transition-colors cursor-pointer ${
+                        activeTab === "comments"
+                          ? "text-blue-400 border-b-2 border-blue-500 pb-2 -mb-2.5"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      <span>Comments ({comments.length})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("activity")}
+                      className={`flex items-center gap-1.5 font-semibold transition-colors cursor-pointer ${
+                        activeTab === "activity"
+                          ? "text-blue-400 border-b-2 border-blue-500 pb-2 -mb-2.5"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      <History className="h-3.5 w-3.5" />
+                      <span>Activity Log ({activities.length})</span>
+                    </button>
+                  </div>
+
+                  {/* Tab 1: Comments */}
+                  {activeTab === "comments" && (
+                    <div className="mt-4 space-y-4">
+                      {/* Comments Thread */}
+                      <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
+                        {comments.length > 0 ? (
+                          comments.map((c) => {
+                            const timeStr = new Date(c.createdAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            });
+
+                            return (
+                              <div
+                                key={c.id}
+                                className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-3 text-xs"
+                              >
+                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                  <div className="flex items-center gap-2">
+                                    {c.user.image ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={c.user.image}
+                                        alt={c.user.name || "User"}
+                                        className="h-4 w-4 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <UserIcon className="h-3.5 w-3.5 text-zinc-400" />
+                                    )}
+                                    <span className="font-semibold text-white">
+                                      {c.user.name || c.user.email}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-zinc-500">
+                                    {timeStr}
+                                  </span>
+                                </div>
+                                <p className="text-zinc-300 leading-relaxed pl-6">
+                                  {c.content}
+                                </p>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="py-6 text-center text-xs text-zinc-500">
+                            No comments yet. Start the conversation below.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Add Comment Input */}
+                      <form onSubmit={handleAddComment} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={commentInput}
+                          onChange={(e) => setCommentInput(e.target.value)}
+                          placeholder="Write a comment or status update..."
+                          className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-zinc-700 focus:ring-2 focus:ring-blue-500/30"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!commentInput.trim() || isSubmittingComment}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {isSubmittingComment ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Send className="h-3.5 w-3.5" />
+                          )}
+                          <span>Post</span>
+                        </button>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* Tab 2: Activity Audit History */}
+                  {activeTab === "activity" && (
+                    <div className="mt-4 max-h-56 overflow-y-auto space-y-2 pr-1">
+                      {activities.length > 0 ? (
+                        activities.map((a) => {
+                          const timeStr = new Date(a.createdAt).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          });
+
+                          return (
+                            <div
+                              key={a.id}
+                              className="flex items-start gap-2.5 text-xs py-1.5 border-b border-zinc-800/40 last:border-0"
+                            >
+                              <div className="h-1.5 w-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
+                              <div className="flex-1">
+                                <span className="text-zinc-300">{a.details}</span>
+                                <span className="text-[10px] text-zinc-500 block mt-0.5">
+                                  {timeStr}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="py-6 text-center text-xs text-zinc-500">
+                          No audit activity recorded yet.
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-
-                {/* Creator */}
-                <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3.5">
-                  <span className="text-zinc-500 block mb-1.5">Created By</span>
-                  <div className="flex items-center gap-2.5">
-                    {task.createdBy.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={task.createdBy.image}
-                        alt={task.createdBy.name || "Creator"}
-                        className="h-6 w-6 rounded-full border border-zinc-700 object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-[10px] font-bold text-zinc-300">
-                        {(task.createdBy.name || task.createdBy.email).slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                    <div>
-                      <span className="font-medium text-white block">
-                        {task.createdBy.name || task.createdBy.email}
-                      </span>
-                      <span className="text-[11px] text-zinc-400">
-                        {task.createdBy.email}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Due Date & Alerts */}
-                <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3.5">
-                  <span className="text-zinc-500 block mb-1.5">Due Date</span>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-zinc-400" />
-                    <span className="font-medium text-white">{formattedDueDate}</span>
-                    {isOverdue && (
-                      <span className="rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold text-rose-400">
-                        Overdue
-                      </span>
-                    )}
-                    {isDueToday && (
-                      <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
-                        Due Today
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Activity Timestamps */}
-                <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3.5">
-                  <span className="text-zinc-500 block mb-1.5">Activity History</span>
-                  <div className="space-y-1 text-[11px] text-zinc-400">
-                    <p>
-                      Created: <span className="text-zinc-200">{formattedCreatedAt}</span>
-                    </p>
-                    <p>
-                      Updated: <span className="text-zinc-200">{formattedUpdatedAt}</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Confirmation Dialog for Task Deletion */}
+      {/* Delete Confirmation Modal */}
       <ConfirmationDialog
         isOpen={showDeleteConfirm}
         title="Delete Task"
-        description={`Are you sure you want to delete "${task.title}"? This action is permanent and cannot be undone.`}
+        description={`Are you sure you want to delete "${task.title}"? This action cannot be undone.`}
         confirmLabel="Delete Task"
         cancelLabel="Cancel"
         isLoading={isDeleting}

@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { signOut } from "next-auth/react";
 import { TaskStatus } from "@prisma/client";
-import { SafeUser, TaskWithUsers } from "@/types/task";
+import {
+  SafeUser,
+  TaskWithUsers,
+  SafeWorkspace,
+  InAppNotification,
+  WorkspaceMemberWithUser,
+} from "@/types/task";
 import { Sidebar, WorkspaceView } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { OverviewMetrics } from "./overview-metrics";
@@ -12,40 +19,65 @@ import { TeamView } from "@/components/team/team-view";
 import { SettingsView } from "@/components/settings/settings-view";
 import { CreateTaskModal } from "@/components/tasks/create-task-modal";
 import { TaskDetailModal } from "@/components/tasks/task-detail-modal";
+import { CommandPalette } from "@/components/ui/command-palette";
+import { AIPlanner } from "@/components/ai/ai-planner";
+import { AIInsightsView } from "@/components/ai/ai-insights-view";
+import { AIWeeklyReportView } from "@/components/ai/ai-weekly-report";
+import { AIChat } from "@/components/ai/ai-chat";
 
 interface WorkspaceShellProps {
   initialMyTasks: TaskWithUsers[];
   initialAssignedTasks: TaskWithUsers[];
   initialUsers: SafeUser[];
+  initialMembers?: WorkspaceMemberWithUser[];
   currentUser: SafeUser;
+  workspace: SafeWorkspace;
+  initialNotifications: InAppNotification[];
+  initialTasks?: TaskWithUsers[];
 }
 
 export function WorkspaceShell({
   initialMyTasks,
   initialAssignedTasks,
   initialUsers,
+  initialMembers,
   currentUser,
+  workspace,
+  initialNotifications,
+  initialTasks,
 }: WorkspaceShellProps) {
   // Merge tasks deduplicating by ID
   const initialCombinedTasks = useMemo(() => {
+    if (initialTasks && initialTasks.length > 0) return initialTasks;
     const map = new Map<string, TaskWithUsers>();
     initialMyTasks.forEach((t) => map.set(t.id, t));
     initialAssignedTasks.forEach((t) => map.set(t.id, t));
     return Array.from(map.values());
-  }, [initialMyTasks, initialAssignedTasks]);
+  }, [initialTasks, initialMyTasks, initialAssignedTasks]);
 
   const [tasks, setTasks] = useState<TaskWithUsers[]>(initialCombinedTasks);
   const [users, setUsers] = useState<SafeUser[]>(initialUsers);
+  const [members, setMembers] = useState<WorkspaceMemberWithUser[]>(initialMembers || []);
+  const [workspaceState, setWorkspaceState] = useState<SafeWorkspace>(workspace);
+  const [notifications, setNotifications] = useState<InAppNotification[]>(initialNotifications || []);
+
   const [activeView, setActiveView] = useState<WorkspaceView>(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const viewParam = params.get("view") as WorkspaceView | null;
-      if (
-        viewParam &&
-        ["dashboard", "tasks", "assigned", "created", "completed", "team", "settings"].includes(
-          viewParam
-        )
-      ) {
+      const validViews = [
+        "dashboard",
+        "tasks",
+        "assigned",
+        "created",
+        "completed",
+        "team",
+        "settings",
+        "ai-planner",
+        "ai-insights",
+        "ai-report",
+      ];
+      if (viewParam && validViews.includes(viewParam)) {
         return viewParam;
       }
     }
@@ -54,20 +86,40 @@ export function WorkspaceShell({
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskWithUsers | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Global Cmd+K / Ctrl+K keyboard shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Sync active view on browser back/forward navigation
   useEffect(() => {
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
       const viewParam = params.get("view") as WorkspaceView | null;
-      if (
-        viewParam &&
-        ["dashboard", "tasks", "assigned", "created", "completed", "team", "settings"].includes(
-          viewParam
-        )
-      ) {
+      const validViews = [
+        "dashboard",
+        "tasks",
+        "assigned",
+        "created",
+        "completed",
+        "team",
+        "settings",
+        "ai-planner",
+        "ai-insights",
+        "ai-report",
+      ];
+      if (viewParam && validViews.includes(viewParam)) {
         setActiveView(viewParam);
       } else {
         setActiveView("dashboard");
@@ -89,13 +141,15 @@ export function WorkspaceShell({
     window.history.replaceState({}, "", url.toString());
   };
 
-  // Refreshes tasks and users from server APIs
-  const handleRefresh = async () => {
+  // Refreshes tasks, members and users from server APIs
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const [tasksRes, usersRes] = await Promise.all([
+      const [tasksRes, usersRes, membersRes, notificationsRes] = await Promise.all([
         fetch("/api/tasks"),
         fetch("/api/users"),
+        fetch("/api/workspace/members"),
+        fetch("/api/notifications"),
       ]);
 
       if (!tasksRes.ok) throw new Error("Failed to fetch tasks");
@@ -111,13 +165,23 @@ export function WorkspaceShell({
         setUsers(usersData.users || []);
       }
 
+      if (membersRes.ok) {
+        const membersData = await membersRes.json();
+        setMembers(membersData.members || []);
+      }
+
+      if (notificationsRes.ok) {
+        const notifData = await notificationsRes.json();
+        setNotifications(notifData.notifications || []);
+      }
+
       toast.success("Workspace synchronized with latest data");
     } catch {
       toast.error("Could not refresh workspace");
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, []);
 
   // Task mutation handlers
   const handleTaskCreated = (newTask: TaskWithUsers) => {
@@ -165,6 +229,8 @@ export function WorkspaceShell({
         activeView={activeView}
         onSelectView={handleSelectView}
         currentUser={currentUser}
+        workspace={workspaceState}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         taskCounts={taskCounts}
@@ -179,6 +245,12 @@ export function WorkspaceShell({
           onCreateTaskClick={() => setIsCreateModalOpen(true)}
           onRefreshClick={handleRefresh}
           isRefreshing={isRefreshing}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          initialNotifications={notifications}
+          onNotificationTaskSelect={(taskId) => {
+            const match = tasks.find((t) => t.id === taskId);
+            if (match) setSelectedTask(match);
+          }}
         />
 
         {/* View Content */}
@@ -187,6 +259,7 @@ export function WorkspaceShell({
             <OverviewMetrics
               tasks={tasks}
               userName={currentUser.name || "Teammate"}
+              currentUserId={currentUser.id}
               onCreateTaskClick={() => setIsCreateModalOpen(true)}
               onSelectTask={(task) => setSelectedTask(task)}
               onViewAllTasksClick={() => handleSelectView("tasks")}
@@ -278,11 +351,66 @@ export function WorkspaceShell({
               users={users}
               tasks={tasks}
               currentUserId={currentUser.id}
+              workspaceRole={workspaceState.role}
+              initialMembers={members}
+              onMemberAdded={(newMember) => {
+                setUsers((prev) => [...prev, newMember]);
+              }}
+              onMemberRemoved={(userId) => {
+                setUsers((prev) => prev.filter((u) => u.id !== userId));
+              }}
             />
           )}
 
           {activeView === "settings" && (
-            <SettingsView currentUser={currentUser} />
+            <SettingsView
+              currentUser={currentUser}
+              workspace={workspaceState}
+              onWorkspaceUpdated={(updatedWs) => setWorkspaceState(updatedWs)}
+            />
+          )}
+
+          {/* ✨ AI Views */}
+          {activeView === "ai-planner" && (
+            <div className="space-y-4">
+              <div className="pb-2 border-b border-zinc-800/60">
+                <h1 className="text-2xl font-bold tracking-tight text-white">
+                  AI Task Planner
+                </h1>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Describe your project goal in plain language and let AI generate a structured task plan.
+                </p>
+              </div>
+              <AIPlanner onTasksCreated={handleRefresh} />
+            </div>
+          )}
+
+          {activeView === "ai-insights" && (
+            <div className="space-y-4">
+              <div className="pb-2 border-b border-zinc-800/60">
+                <h1 className="text-2xl font-bold tracking-tight text-white">
+                  AI Team Insights
+                </h1>
+                <p className="mt-1 text-xs text-zinc-400">
+                  AI-powered analysis of your team&apos;s productivity, workload, and potential blockers.
+                </p>
+              </div>
+              <AIInsightsView workspaceName={workspaceState.name || "Workspace"} />
+            </div>
+          )}
+
+          {activeView === "ai-report" && (
+            <div className="space-y-4">
+              <div className="pb-2 border-b border-zinc-800/60">
+                <h1 className="text-2xl font-bold tracking-tight text-white">
+                  AI Weekly Report
+                </h1>
+                <p className="mt-1 text-xs text-zinc-400">
+                  AI-generated weekly summary of team performance, completed work, and recommended priorities.
+                </p>
+              </div>
+              <AIWeeklyReportView />
+            </div>
           )}
         </main>
       </div>
@@ -302,10 +430,26 @@ export function WorkspaceShell({
         isOpen={selectedTask !== null}
         onClose={() => setSelectedTask(null)}
         currentUserId={currentUser.id}
+        workspaceRole={workspaceState.role}
         users={users}
         onTaskUpdated={handleTaskUpdated}
         onTaskDeleted={handleTaskDeleted}
       />
+
+      {/* Keyboard-Accessible Command Palette (Cmd+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onSelectView={handleSelectView}
+        onCreateTaskClick={() => setIsCreateModalOpen(true)}
+        onSelectTask={(task) => setSelectedTask(task)}
+        tasks={tasks}
+        users={users}
+        onSignOutClick={() => signOut({ callbackUrl: "/login" })}
+      />
+
+      {/* AI Chat Assistant (floating) */}
+      <AIChat />
     </div>
   );
 }

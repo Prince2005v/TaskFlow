@@ -1,37 +1,47 @@
 import { NextResponse } from "next/server";
-import { getAuthUser } from "@/lib/auth-helpers";
+import { getAuthUserWithWorkspace } from "@/lib/workspace-helpers";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const currentUser = await getAuthUser();
-    if (!currentUser) {
+    const auth = await getAuthUserWithWorkspace();
+    if (!auth) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true,
-        createdAt: true,
-        _count: {
+    const { workspace } = auth;
+
+    // Fetch users who are members of the user's active workspace
+    const workspaceMembers = await prisma.workspaceMember.findMany({
+      where: { workspaceId: workspace.id },
+      include: {
+        user: {
           select: {
-            assignedTasks: true,
-            createdTasks: true,
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            createdAt: true,
+            _count: {
+              select: {
+                assignedTasks: true,
+                createdTasks: true,
+              },
+            },
           },
         },
       },
       orderBy: [
-        { name: "asc" },
-        { email: "asc" },
+        { role: "asc" },
+        { createdAt: "asc" },
       ],
     });
 
+    const users = workspaceMembers.map((m) => m.user);
+
     return NextResponse.json({ users });
   } catch (error) {
-    console.error("Error fetching users:", error);
+    console.error("Error fetching workspace users:", error);
     return NextResponse.json(
       { error: "Failed to fetch users" },
       { status: 500 }

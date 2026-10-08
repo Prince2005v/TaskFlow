@@ -11,8 +11,12 @@ import {
   X,
   LogOut,
   FolderPlus,
+  Sparkles,
+  Brain,
+  BarChart3,
+  FileText,
 } from "lucide-react";
-import { SafeUser } from "@/types/task";
+import { SafeUser, SafeWorkspace } from "@/types/task";
 import { signOut } from "next-auth/react";
 
 export type WorkspaceView =
@@ -22,12 +26,17 @@ export type WorkspaceView =
   | "created"
   | "completed"
   | "team"
-  | "settings";
+  | "settings"
+  | "ai-planner"
+  | "ai-insights"
+  | "ai-report";
 
 interface SidebarProps {
   activeView: WorkspaceView;
   onSelectView: (view: WorkspaceView) => void;
   currentUser: SafeUser;
+  workspace?: SafeWorkspace;
+  onOpenCommandPalette?: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
   taskCounts: {
@@ -42,6 +51,8 @@ export function Sidebar({
   activeView,
   onSelectView,
   currentUser,
+  workspace,
+  onOpenCommandPalette,
   isOpenMobile,
   onCloseMobile,
   taskCounts,
@@ -103,15 +114,15 @@ export function Sidebar({
         {/* Brand Header */}
         <div className="flex items-center justify-between px-2 pb-5 border-b border-zinc-800/80">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/10 border border-blue-500/20 text-blue-400 shadow-inner">
-              <CheckSquare className="h-5 w-5 text-blue-400" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600/20 to-blue-600/10 border border-violet-500/20 text-violet-400 shadow-inner">
+              <Sparkles className="h-5 w-5 text-violet-400" />
             </div>
             <div>
               <span className="text-base font-bold tracking-tight text-white block leading-tight">
-                TaskFlow
+                TaskFlow{" "}<span className="bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">AI</span>
               </span>
               <span className="text-[10px] text-zinc-500 font-medium tracking-wide uppercase">
-                B2B Workspace
+                AI-Powered SaaS
               </span>
             </div>
           </div>
@@ -126,14 +137,30 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Workspace Team Tag */}
-        <div className="mt-4 px-2 py-2 rounded-xl bg-zinc-900/60 border border-zinc-800/60 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-emerald-500/20" />
-            <span className="font-medium text-zinc-300">Engineering Team</span>
+        {/* Workspace Team Tag & Plan */}
+        <div className="mt-4 px-2.5 py-2 rounded-xl bg-zinc-900/60 border border-zinc-800/60 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 truncate mr-1">
+            <div className="h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-emerald-500/20 shrink-0" />
+            <span className="font-semibold text-zinc-200 truncate">
+              {workspace?.name || "Workspace"}
+            </span>
           </div>
-          <span className="text-[10px] text-zinc-500">Cloud</span>
+          <span className="rounded bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold text-blue-400 shrink-0 uppercase tracking-wide">
+            {workspace?.plan || "FREE"}
+          </span>
         </div>
+
+        {/* Quick Search Shortcut */}
+        {onOpenCommandPalette && (
+          <button
+            type="button"
+            onClick={onOpenCommandPalette}
+            className="mt-2.5 flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-xs text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors cursor-pointer"
+          >
+            <span className="text-[11px]">Quick Search</span>
+            <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 border border-zinc-700">⌘K</kbd>
+          </button>
+        )}
 
         {/* Navigation Sections */}
         <div className="mt-6 flex-1 space-y-6 overflow-y-auto pr-1">
@@ -199,6 +226,41 @@ export function Sidebar({
                   <span>Team &amp; Members</span>
                 </div>
               </button>
+            </nav>
+          </div>
+
+          {/* ✨ AI Assistant Section */}
+          <div>
+            <div className="px-2 flex items-center gap-1.5 mb-2">
+              <Sparkles className="h-3 w-3 text-violet-400" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-violet-400">
+                AI Assistant
+              </span>
+            </div>
+            <nav className="space-y-1">
+              {([
+                { id: "ai-planner" as WorkspaceView, label: "AI Planner", icon: Brain },
+                { id: "ai-insights" as WorkspaceView, label: "AI Insights", icon: BarChart3 },
+                { id: "ai-report" as WorkspaceView, label: "Weekly Report", icon: FileText },
+              ] as const).map((item) => {
+                const Icon = item.icon;
+                const isActive = activeView === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleNavClick(item.id)}
+                    className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
+                      isActive
+                        ? "bg-violet-600/10 text-violet-400 border border-violet-500/20 font-semibold"
+                        : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 border border-transparent"
+                    }`}
+                  >
+                    <Icon className={`h-4 w-4 ${isActive ? "text-violet-400" : "text-zinc-500"}`} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
             </nav>
           </div>
 

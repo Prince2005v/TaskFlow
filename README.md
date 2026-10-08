@@ -1,257 +1,255 @@
 # TaskFlow
 
-> Enterprise-grade task and workflow orchestration platform for modern engineering and operations teams.
+> Enterprise-grade B2B team productivity and task management SaaS platform.
 
 ---
 
-## Overview
+## 1. Product Overview
 
-**TaskFlow** is a modern B2B SaaS application designed to help small and medium-sized businesses organize work, assign responsibilities, track deliverables, and maintain cross-functional alignment. Built with high performance, strict data isolation, and a refined interface inspired by Linear and Notion, TaskFlow delivers commercial-quality productivity tools with automated transactional Gmail notifications.
-
----
-
-## Features
-
-- **Executive KPI Dashboard**: Live metrics tracking Total Tasks, In Progress, Completed, and Overdue deliverables with a segmented project health bar.
-- **Full Task Lifecycle Management**: Create, view, update, reassign, and delete tasks with validated priorities (`LOW`, `MEDIUM`, `HIGH`) and statuses (`PENDING`, `IN_PROGRESS`, `COMPLETED`).
-- **Comprehensive Task Table & Mobile Cards**: Responsive layout featuring instant search, status filtering, priority filtering, teammate filtering, and multi-mode sorting (due date, creation date, priority).
-- **Task Detail & Inline Editing**: Modal and drawer views displaying full descriptions, assignee, creator, due date alerts (overdue & due today badges), and audit timestamps.
-- **Destructive Action Guards**: Accessible confirmation dialogs for task deletion and workspace sign-out.
-- **Team Workload Directory**: Team visibility screen exposing member roles, active workloads, and completed task milestones.
-- **Transactional Gmail Notifications**: Automated HTML emails sent to assignees upon task delegation and to creators upon task completion.
-- **Enterprise Google OAuth 2.0**: Secure authentication via NextAuth v4 and Prisma session management.
-- **Workspace Preferences**: Self-service profile review, email service diagnostics, and secure session management.
+**TaskFlow** is a multi-tenant B2B SaaS platform engineered for agile software teams, creative agencies, and high-velocity startups. Built with a dark-mode design system inspired by Linear and Notion, TaskFlow transforms basic task tracking into an organized team operating system with strict workspace data isolation, granular role-based access control (RBAC), task activity audit logging, interactive comment threads, in-app notifications, and automated transactional Gmail updates.
 
 ---
 
-## Architecture
+## 2. Key Features
 
-TaskFlow adopts a modern full-stack Next.js architecture combining Server Components for fast data delivery with React Client Components for reactive user interactions:
+- **Multi-Tenant Workspaces**: Complete workspace isolation where all tasks, members, audit trails, and comments belong strictly to an organization.
+- **Team Roles & Permissions (RBAC)**:
+  - `OWNER`: Full administrative control, workspace settings, role modifications, member deletion.
+  - `ADMIN`: Member invitation, task management across the team, member seat management.
+  - `MEMBER`: Authorized creation, execution, and updating of assigned deliverables.
+- **Task Activity Audit History**: Complete chronological log of state changes (task created, assigned, reassigned, priority changed, status moved, due date updated, completed).
+- **Task Comments & Discussion**: Threaded real-time comments on deliverables with author avatars and relative timestamps.
+- **Due Date & Overdue Intelligence**: Automatic categorisation into `Overdue`, `Due Today`, `Due Tomorrow`, and `Upcoming` with clear visual status pills and dashboard alerts.
+- **Advanced Task Filtering & URL Persistence**:
+  - Full-text search across titles and descriptions.
+  - Multi-attribute filtering (Status, Priority, Assignee, Due Date).
+  - Multi-mode sorting (Newest, Oldest, Due Date Soonest/Latest, Priority High/Low, Recently Updated).
+  - Shareable and bookmarkable URL query parameter synchronization (`?status=...&due=...&sort=...`).
+- **Comprehensive Task Detail Modal**: Two-pane interface with live status switcher, metadata grid, comment threads, and audit history.
+- **In-App Notification Center**: Bell icon in header displaying unread badge counts, dropdown notification feed, mark-as-read, and mark-all-read actions.
+- **Transactional Gmail Notifications**: High-deliverability transactional emails for task assignment, reassignment, completion, and updates via Gmail SMTP.
+- **Executive Business Dashboard**:
+  - Time-aware executive greeting.
+  - Real-time KPI statistics: Total Tasks, In Progress, Completed, Overdue.
+  - Progress bar with segment ratios.
+  - Direct alert module for overdue deliverables.
+  - Dedicated "Assigned to Me" and "Recent Deliverables" sections.
+- **Team Workload Matrix**: Resource capacity visualization detailing each teammate's assigned, in progress, completed, and overdue volume to prevent burnout and bottlenecks.
+- **Global Search & Keyboard Command Palette (`⌘K` / `Ctrl+K`)**:
+  - Fast keyboard navigation across views.
+  - Instant search across workspace deliverables and team members.
+  - Quick action shortcuts (create task, jump to dashboard, view team, settings, logout).
+- **Billing-Ready Architecture**: Conceptual tiered plans (`FREE`, `PRO`, `BUSINESS`) ready for Stripe webhook and checkout integration without blocking active workflows.
+- **Workspace Settings**: Self-service profile review, workspace renaming, notification controls, and session termination guards.
+
+---
+
+## 3. System Architecture
+
+TaskFlow uses the Next.js App Router combining Server Components for fast pre-fetching with React Client Components for real-time reactivity:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       Client Browser                        │
-│   Landing Page  │  Login (OAuth)  │  Executive Workspace    │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ HTTPS / JSON
-┌──────────────────────────────▼──────────────────────────────┐
-│                    Next.js App Server                       │
-│  ┌───────────────────────┐      ┌─────────────────────────┐ │
-│  │   Server Components   │      │    REST API Endpoints   │ │
-│  │   & NextAuth Session  │      │ /api/tasks  /api/users  │ │
-│  └───────────┬───────────┘      └────────────┬────────────┘ │
-└──────────────┼───────────────────────────────┼──────────────┘
-               │                               │
-       Prisma 6 Client                 Prisma 6 Client
-               │                               │
-┌──────────────▼───────────────────────────────▼──────────────┐
-│                  PostgreSQL Database                        │
-│   Users  │  Accounts  │  Sessions  │  Tasks (Relations)     │
-└─────────────────────────────────────────────────────────────┘
-                               ▲
-                               │ Nodemailer SMTP
-┌──────────────────────────────┴──────────────────────────────┐
-│                    Gmail SMTP Gateway                       │
-│      Task Created Alerts    │    Task Completed Alerts      │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Tech Stack
-
-- **Framework**: [Next.js 16](https://nextjs.org/) (App Router & API handlers)
-- **Language**: [TypeScript 5](https://www.typescriptlang.org/) (Strict type-checking)
-- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/) with subtle dark-mode system tokens
-- **Database**: [PostgreSQL](https://www.postgresql.org/)
-- **ORM**: [Prisma 6.19](https://www.prisma.io/)
-- **Authentication**: [NextAuth 4.24](https://next-auth.js.org/) with `@next-auth/prisma-adapter`
-- **Email Delivery**: [Nodemailer 7.0](https://nodemailer.com/) with Gmail SMTP & App Passwords
-- **UI & Icons**: [Lucide React](https://lucide.dev/), Sonner Toasts, Base UI
-
----
-
-## Project Structure
-
-```
-taskflow/
-├── prisma/
-│   ├── schema.prisma        # Prisma data models (User, Task, Account, Session)
-│   └── migrations/          # Version-controlled SQL migration history
-├── public/                  # Static assets and favicons
-├── src/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── tasks/
-│   │   │   │   ├── route.ts         # GET (list tasks) & POST (create task + email)
-│   │   │   │   └── [id]/route.ts    # GET, PATCH (update + completion email), DELETE
-│   │   │   └── users/route.ts       # GET (safe member list with task counts)
-│   │   ├── dashboard/
-│   │   │   ├── page.tsx             # Protected server component loading DB data
-│   │   │   └── logout-button.tsx    # Sign-out action trigger
-│   │   ├── login/
-│   │   │   └── page.tsx             # Polished Google OAuth login screen
-│   │   ├── globals.css              # Theme CSS tokens & Tailwind configuration
-│   │   ├── layout.tsx               # Root layout with dark mode & Toaster
-│   │   └── page.tsx                 # Commercial SaaS landing page
-│   ├── components/
-│   │   ├── dashboard/
-│   │   │   ├── overview-metrics.tsx # KPI summary & recent tasks preview
-│   │   │   └── workspace-shell.tsx  # Master workspace client coordinator
-│   │   ├── layout/
-│   │   │   ├── header.tsx           # Workspace top bar & breadcrumb
-│   │   │   └── sidebar.tsx          # Navigation sidebar & responsive drawer
-│   │   ├── settings/
-│   │   │   └── settings-view.tsx    # Profile, notifications & account preferences
-│   │   ├── tasks/
-│   │   │   ├── create-task-modal.tsx# Form-validated task creation dialog
-│   │   │   ├── task-card.tsx        # Card display component
-│   │   │   ├── task-detail-modal.tsx# Task detail & edit/delete modal
-│   │   │   └── task-table.tsx       # Desktop table & mobile cards with filters
-│   │   ├── team/
-│   │   │   └── team-view.tsx        # Member directory & workload breakdown
-│   │   └── ui/                      # Primitive UI components & confirmation dialogs
-│   ├── lib/
-│   │   ├── auth-helpers.ts          # Server-side getAuthUser session resolver
-│   │   ├── mail.ts                  # Nodemailer utility with responsive HTML templates
-│   │   ├── prisma.ts                # Global PrismaClient singleton instance
-│   │   └── utils.ts                 # Class merging helpers
-│   ├── pages/api/auth/
-│   │   └── [...nextauth].ts         # NextAuth v4 configuration route
-│   └── types/
-│       └── task.ts                  # Shared TypeScript interfaces
-├── .env.example                     # Environment template (NO SECRETS)
-├── package.json
-├── README.md
-└── tsconfig.json
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Client Web Application                          │
+│   Landing Page  │  Google Login  │  Executive Dashboard & Command ⌘K   │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ HTTPS / JSON
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                         Next.js App Server                             │
+│   ┌─────────────────────────────┐    ┌───────────────────────────────┐ │
+│   │      Server Components      │    │       REST API Handlers       │ │
+│   │   Pre-fetching & Auth Guard │    │ /api/tasks      /api/workspace│ │
+│   │   Workspace Resolution      │    │ /api/notifications /api/search│ │
+│   └──────────────┬──────────────┘    └──────────────┬────────────────┘ │
+└──────────────────┼──────────────────────────────────┼──────────────────┘
+                   │                                  │
+          Prisma Client (ORM)                Prisma Client (ORM)
+                   │                                  │
+┌──────────────────▼──────────────────────────────────▼──────────────────┐
+│                      PostgreSQL Database                               │
+│  Users  │  Workspaces  │  WorkspaceMembers  │  Tasks  │  Subtasks      │
+│  TaskActivities  │  TaskComments  │  Notifications  │  Accounts        │
+└────────────────────────────────────────────────────────────────────────┘
+                                    ▲
+                                    │ Nodemailer SMTP
+┌───────────────────────────────────┴────────────────────────────────────┐
+│                         Gmail SMTP Gateway                             │
+│       Transactional alerts dispatched asynchronously in background     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Authentication Flow
+## 4. Database Schema Design
 
-1. User clicks **"Continue with Google"** on `/login`.
-2. NextAuth initiates Google OAuth 2.0 authorization request with `email` and `profile` scopes.
-3. User authorizes TaskFlow on Google's consent screen.
-4. Google redirects to `/api/auth/callback/google` with authorization code.
-5. NextAuth exchanges code for tokens, verifies profile, and uses `@next-auth/prisma-adapter` to upsert the user record in PostgreSQL.
-6. A secure database session token is stored in HTTP-only cookies.
-7. User is redirected to `/dashboard`.
-8. Unauthenticated requests to `/dashboard` or protected APIs automatically redirect or return `401 Unauthorized`.
+Data models are managed via Prisma ORM connected to PostgreSQL:
 
----
+### Core Entities & Relationships
 
-## Task Flow
-
-1. **Creation**: Authenticated user submits the "+ Create task" form (`title`, `description`, `priority`, `dueDate`, `assignedToId`).
-2. **Server Validation**: `POST /api/tasks` validates title, resolves current session via `getAuthUser()`, confirms assigned user exists in DB, and creates the task with `status: PENDING`.
-3. **Email Alert**: If assigned to a team member, `sendTaskCreatedEmail` dispatches a styled notification asynchronously.
-4. **Tracking & Updates**: Creator and assignee can advance status through `PENDING` → `IN_PROGRESS` → `COMPLETED`.
-5. **Editing**: Only the task creator has authorization to edit title, description, priority, due date, or assignee.
-6. **Deletion**: Only the task creator can delete the task via `DELETE /api/tasks/[id]` after confirming via the modal guard.
+1. **`User`**: Account identity created through Google OAuth. Has many tasks, workspace memberships, comments, activities, and notifications.
+2. **`Workspace`**: Tenant boundary (`id`, `name`, `slug`, `plan`, `ownerId`). Has many members and tasks.
+3. **`WorkspaceMember`**: Join table mapping `User` to `Workspace` with `role` (`OWNER`, `ADMIN`, `MEMBER`).
+4. **`WorkspaceInvite`**: Pending seat invitations with secure token verification.
+5. **`Task`**: Deliverable record scoped to `workspaceId`. Belongs to `createdBy` and optional `assignedTo`. Supports parent/subtask relationships (`parentId`).
+6. **`TaskActivity`**: Immutable audit logs capturing action (`CREATED`, `ASSIGNED`, `REASSIGNED`, `STATUS_CHANGED`, `PRIORITY_CHANGED`, `DUE_DATE_CHANGED`, `COMPLETED`, `COMMENTED`) with old/new values.
+7. **`TaskComment`**: Threaded discussion entries tied to a task and commenter.
+8. **`Notification`**: In-app notifications with read status (`isRead`), action link, and type.
+9. **`Account` & `Session`**: NextAuth authentication tables for Google OAuth.
 
 ---
 
-## Email Notification Flow
+## 5. Authentication & Security Flow
 
-- **Trigger 1 — Assignment**: Sent to the designated assignee when a task is created or assigned to them.
-- **Trigger 2 — Completion**: Sent to the task creator when a task transitions to `COMPLETED`.
-- **Duplicate Prevention**: Status updates from `COMPLETED` to `COMPLETED` never re-dispatch completion emails.
-- **Fault-Tolerant Delivery**: Email operations run with non-blocking error handling. If SMTP credentials fail or network connectivity lapses, the database operation still succeeds and the user receives an informative toast.
+1. **Google OAuth 2.0 via NextAuth v4**:
+   - The user initiates sign-in on `/login`.
+   - Google validates credentials and redirects to `/api/auth/callback/google`.
+   - `@next-auth/prisma-adapter` matches or provisions the `User` record in PostgreSQL.
+2. **Server-Side Session Validation**:
+   - Every protected API and page validates authentication using `getAuthUserWithWorkspace()`.
+   - Unauthenticated requests receive HTTP `401 Unauthorized`.
+3. **Workspace Provisioning & Auto-Migration**:
+   - When a user logs in, `getUserWorkspace(userId)` resolves their active workspace membership.
+   - If a user has no workspace (e.g. legacy user), a personal workspace is automatically provisioned and any legacy orphan tasks are seamlessly attached without data loss.
+4. **Server-Side RBAC Enforcement**:
+   - Roles are checked in API handlers, not just hidden in UI.
+   - Deleting a task or removing a member checks that the actor has `OWNER` or `ADMIN` rights in that specific workspace.
+5. **Tenant Isolation**:
+   - All queries filter by `workspaceId: workspace.id`.
+   - Users cannot access, query, or mutate tasks or members from another workspace.
 
 ---
 
-## Environment Variables
+## 6. Task Lifecycle & Audit History
 
-Copy the template file to configure your local environment:
+```
+  ┌──────────────┐
+  │   CREATED    │─── Logged to TaskActivity & In-App Notification dispatched
+  └──────┬───────┘
+         │
+         ▼
+  ┌──────────────┐
+  │   PENDING    │─── Initial state upon creation
+  └──────┬───────┘
+         │
+         ▼
+  ┌──────────────┐
+  │ IN PROGRESS  │─── Active work initiated
+  └──────┬───────┘
+         │
+         ▼
+  ┌──────────────┐
+  │  COMPLETED   │─── Final state; triggers creator confirmation email & audit entry
+  └──────────────┘
+```
+
+Every transition automatically creates a `TaskActivity` record in the database containing the actor ID, action type, descriptive text, and prior/new state values.
+
+---
+
+## 7. Notification & Email Architecture
+
+### In-App Notifications
+- Dispatched when:
+  - A task is assigned or reassigned to a user.
+  - A task is marked completed (notifying the creator).
+  - A comment is posted on a deliverable (notifying creator and assignee).
+  - A task is nearing its due date.
+- Stored directly in PostgreSQL with `isRead: boolean`.
+- Real-time notification badge and interactive dropdown popover in the top navigation bar.
+
+### Transactional Gmail SMTP Notifications
+- Configured using Nodemailer with standard Gmail App Passwords (`GMAIL_USER`, `GMAIL_APP_PASSWORD`).
+- **Resilient Background Execution**: Dispatched asynchronously (`Promise.catch(...)`) so SMTP timeouts or network failures never roll back the primary database transaction.
+- **Anti-Spam Deduplication**: Notifications are only sent to legitimate recipient addresses and never to the actor who performed the action.
+
+---
+
+## 8. Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+# Database
+DATABASE_URL="postgresql://username:password@localhost:5432/taskflow?schema=public"
+
+# NextAuth Configuration
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="your-secure-random-nextauth-secret-here"
+
+# Google Cloud OAuth 2.0 Credentials
+GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+
+# Gmail Transactional SMTP (Optional, for email delivery)
+GMAIL_USER="your-email@gmail.com"
+GMAIL_APP_PASSWORD="your-16-character-gmail-app-password"
+```
+
+> **Note**: Never commit `.env` or real credentials to version control. Keep `.env` listed in `.gitignore`.
+
+---
+
+## 9. Local Development Setup
+
+### Prerequisites
+- Node.js 18+ or 20+
+- PostgreSQL database instance running locally or on a cloud provider (e.g. Supabase, Neon)
+
+### Quick Start
 
 ```bash
-cp .env.example .env
-```
+# 1. Clone repository
+git clone https://github.com/Prince2005v/TaskFlow.git
+cd taskflow
 
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/taskflow` |
-| `NEXTAUTH_URL` | Canonical app URL | `http://localhost:3000` |
-| `NEXTAUTH_SECRET` | 32-byte session encryption key | `openssl rand -base64 32` |
-| `GOOGLE_CLIENT_ID` | Google Cloud OAuth Client ID | `your-id.apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth Client Secret | `GOCSPX-your-secret` |
-| `GMAIL_USER` | Gmail address for SMTP sender | `team@company.com` |
-| `GMAIL_APP_PASSWORD` | 16-character Google App Password | `abcd efgh ijkl mnop` |
+# 2. Install dependencies
+npm install
 
-> ⚠️ **Security Warning**: Never commit `.env` or paste live secrets into source control. Keep `.env*` ignored by Git.
-
----
-
-## Local Development
-
-### 1. Prerequisites
-
-- **Node.js** 20.x or higher
-- **PostgreSQL** 14.x or higher
-- **npm** or **pnpm**
-
-### 2. Database Setup
-
-Ensure PostgreSQL is running locally and your database exists:
-
-```bash
-# Create database (if not existing)
-createdb taskflow
-
-# Generate Prisma Client
+# 3. Synchronize database schema
+npx prisma db push
 npx prisma generate
 
-# Apply existing migrations
-npx prisma migrate deploy
-```
-
-### 3. Running Frontend
-
-Start the Next.js development server:
-
-```bash
+# 4. Start local development server
 npm run dev
 ```
 
-Navigate to [http://localhost:3000](http://localhost:3000) in your browser.
+Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## Deployment
+## 10. Production Deployment
 
-To deploy TaskFlow to production (e.g. Vercel, Railway, AWS ECS, or Render):
+### Building for Production
 
-1. **Build Verification**:
-   ```bash
-   npm run build
-   ```
-2. **Environment Variables**: Add all variables from `.env.example` in your hosting dashboard.
-3. **Database Migration**: Run `npx prisma migrate deploy` in your CI/CD pipeline before traffic routing.
-4. **Google OAuth Production Origin**:
-   - Authorized JavaScript origin: `https://your-domain.com`
-   - Authorized redirect URI: `https://your-domain.com/api/auth/callback/google`
+```bash
+# Typecheck and build optimized bundle
+npm run build
 
----
+# Start production server
+npm start
+```
 
-## Security
-
-- **Server-Side Session Validation**: All API routes (`/api/tasks`, `/api/tasks/[id]`, `/api/users`) resolve authentication strictly using `getAuthUser()`.
-- **Strict Role-Based Authorization**: Task modifications and deletions enforce that only authorized creators or assignees can modify state.
-- **No Token Exposure**: OAuth refresh tokens, access tokens, and SMTP credentials remain strictly server-side.
-- **SQL Injection Immune**: All database access uses Prisma parameterized queries.
-- **Input Sanitization**: Request bodies are validated for structure, non-empty titles, valid enum values, and date parsing.
+### Deployment on Vercel / Railway / AWS
+1. Provision a managed PostgreSQL instance (Supabase, Neon, AWS RDS).
+2. Set all environment variables (`DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`).
+3. Set the Google OAuth Authorized Redirect URI to `https://your-domain.com/api/auth/callback/google`.
+4. Run `npx prisma migrate deploy` in the build step to apply database migrations.
 
 ---
 
-## Future Improvements
+## 11. Security Considerations
 
-- [ ] Real-time websocket collaboration / live status sync across simultaneous active sessions.
-- [ ] Task file attachments stored in S3-compatible cloud object storage.
-- [ ] Customizable subtasks and checklist deliverables.
-- [ ] Multiple workspace / organization switching support.
-- [ ] Export task reports to CSV and PDF formats.
+- **SQL Injection Prevention**: 100% of database interactions run through Prisma's parameterized queries.
+- **Cross-Tenant Data Leaks**: Every API route resolves the authenticated user's workspace ID and enforces `workspaceId: workspace.id` scoping.
+- **Secret Hygiene**: All OAuth client secrets, database connection strings, and SMTP passwords remain strictly server-side and are omitted from client bundles.
+- **Protected Endpoints**: Server-side validation rejects unauthenticated or unauthorized requests with standard HTTP status codes (`401`, `403`).
+- **Confirmation Guards**: Dangerous actions (task deletion, member removal, sign out) require explicit user confirmation.
 
 ---
 
-&copy; TaskFlow Technologies. All rights reserved.
+## 12. Future Roadmap
+
+- **Stripe Billing Integration**: Webhook handlers for subscription checkout (`PRO` and `BUSINESS` tiers).
+- **Custom Webhooks**: Slack and Discord integrations for task status events.
+- **Attachments & File Uploads**: S3-compatible asset storage for deliverables.
+- **Gantt & Kanban Views**: Alternative project visualization boards.
